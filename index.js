@@ -9,7 +9,6 @@ let userToken = "";
 axios.post(backend+'/login', { username: 'userTest', password: 'Password' })
   .then(response=>{
     userToken += response.data;
-    console.log(userToken);
     alert('thank you for logging in '+'userTest');
     updateAll();
   });
@@ -23,7 +22,6 @@ function userUpdate()
   //console.log(`${backend}/${userToken}/funds`);
   axios.get(`${backend}/${userToken}/funds`)
   .then(response=>{
-    console.log(response.data);
     d_userFunds.innerHTML = response.data;
   })
 }
@@ -44,40 +42,37 @@ function inventoryUpdate()
       if(location>=0)
       {
         totals[location].total+=x.amount;
+        totals[location].totalval+=x.amount*x.value;
       }
       else {
-        totals.push({stock:x.symbol, total:x.amount})
+        totals.push({stock:x.symbol, total:x.amount, totalval:x.amount*x.value})
       }
     })
-    console.log(totals);
     let sOut = '';
     let value = totals.map(x=>{
-      return axios.get(route('stock',x.stock,"price"))
+    return axios.get(route('stock',x.stock,"price"))
     })
     axios.all(value)
     .then(x=>{
       let i=0;
       x.forEach(y=>{
-        sOut+=`stock: ${totals[i].stock} / amount: ${totals[i].total} / price: ${y.data} / value: ${totals[i].total*y.data}</br>`
+        if(totals[i].total>0)
+        {
+          sOut+=`stock: ${totals[i].stock} / amount: ${totals[i].total} / paid: ${Math.round((totals[i].totalval / totals[i].total) * 1000) / 1000}/ price: ${y.data} / value: ${totals[i].total*y.data} <input type="button" value="buy/sell" onclick="buyStuff('${totals[i].stock}')"></button><input type="button" value="review" onclick="showHistory('${totals[i].stock}')"></button></br> `
+        }
         i++;
       })
       d_dataDump.innerHTML = sOut;
     })
     .catch(x=>{
-      console.log(x);
+      console.log(x)
     })
 
-  })
-  .catch(x=>{
-    console.log(x);
   })
 }
 
 function purchase(stock, amount, cost)
 {
-  //'/:token/:stockSymbol/trade'
-  //amount:req.body.amount,
-  //value:req.body.cost
   axios.post(`${backend}/${userToken}/${stock}/trade`,{cost:cost,amount:amount})
   .then(x=>{
     updateAll();
@@ -85,27 +80,36 @@ function purchase(stock, amount, cost)
   .catch(x=>console.log(x));
 }
 
-function buyStuff()
+function buyStuff(symbol = document.querySelector('.stockInput').value)
 {
-  let d_stockInput = document.querySelector('.stockInput');
   let amount = prompt("how much to buy?","1")
-  axios.get(route('stock',d_stockInput.value,"price"))
+  axios.get(route('stock',symbol,"price"))
   .then(x=>{
-    purchase(d_stockInput.value, amount, x.data)
+    purchase(symbol, amount, x.data)
   })
 }
 
-function searchButton()
+function searchStock()
 {
   let d_stockInput = document.querySelector('.stockInput');
   let d_stockOut = document.querySelector('.stockOut');
   axios.get(route('stock',d_stockInput.value,"price"))
   .then(x=>{
+    //template literal has issues...
     d_stockOut.innerHTML = `${d_stockInput.value} / price: ${x.data} <input type="button" value="buy/sell" onclick="buyStuff()"></button>`;
   })
   .catch({
 
   })
+}
+
+//`<a href="#" onclick="test('${}')">`
+
+//TODO: finish this
+function searchButton()
+{
+  let d_stockInput = document.querySelector('.stockInput');
+  searchStock()
 }
 
 function updateAll()
@@ -123,6 +127,29 @@ function updateAll()
 });
 }
 
+/*
+"amount": 5,
+"id": 6,
+"symbol": "cefl",
+"tradetime": null,
+"uid": 1,
+"value": 16.44
+
+*/
+function showHistory(symbol)
+{
+  axios.get(`${backend}/${userToken}/${symbol}`)
+  .then(x=>{
+    console.log(x);
+    let d_dataDump = document.querySelector('.dataDump');
+    d_dataDump.innerHTML =x.data.reduce((acc,curr)=>{
+          return acc +=`Trade Time(future release):${curr.tradetime} | Amount bought/sold: ${curr.amount} | Amount per share:${curr.value}</br>`;
+        },'');
+  })
+}
+
+
+
 //setup everything.
 
 //TODO:route creator... need to rethink this
@@ -130,7 +157,6 @@ function route(...etc)
 {
   etc.unshift(stockAPI);
   let sOut = etc.reduce((acc, curr)=>acc+=curr+'/');
-  console.log(sOut);
   return sOut;
 }
 
